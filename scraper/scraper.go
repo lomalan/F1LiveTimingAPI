@@ -25,30 +25,23 @@ type RaceHeader struct {
 }
 
 type PilotSummary struct {
-	Position string `json:"position"`
-	Name     string `json:"name"`
-	Team     string `json:"team"`
-	Time     string `json:"gap"`
-	Stops    string `json:"stops"`
+	Position string `json:"position,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Team     string `json:"team,omitempty"`
+	Time     string `json:"gap,omitempty"`
+	Stops    string `json:"stops,omitempty"`
 }
 
 const layout = "1/2/2006 3:04:05 PM"
+const outputLayout = "2006-1-2 3:04:05 PM"
 
 func GetF1PlanetLiveRaceResult() RaceResult {
 	c := colly.NewCollector(
 		colly.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"),
 	)
 
-	c.OnRequest(func(r *colly.Request) {
-		log.Println("Visiting", r.URL)
-	})
-
 	c.OnError(func(_ *colly.Response, err error) {
 		log.Println("Something went wrong:", err)
-	})
-
-	c.OnResponse(func(r *colly.Response) {
-		log.Println("Visited", r.Request.URL)
 	})
 
 	var raceHeader RaceHeader
@@ -61,13 +54,8 @@ func GetF1PlanetLiveRaceResult() RaceResult {
 	})
 
 	var raceDateTime time.Time
-	var raceStatus string
-
 	c.OnHTML(".race_type_Id_selected_class_3182 span.race_type_list", func(e *colly.HTMLElement) {
-		raceDateTime = toDateTime(e.Attr("data-sdatetime"))
-		if time.Now().Before(raceDateTime) {
-			raceStatus = "NOT_STARTED"
-		}
+		raceDateTime = toDateTime(e.Attr("data-sdatetime")).Local()
 	})
 
 	var raceSummary []PilotSummary
@@ -98,11 +86,13 @@ func GetF1PlanetLiveRaceResult() RaceResult {
 		}
 	})
 
+	var raceStatus string
 	var raceResult RaceResult
 	c.OnScraped(func(r *colly.Response) {
+		raceStatus = getRaceStatus(raceDateTime, fastestLap.Name)
 		raceResult = RaceResult{
 			RaceHeader: raceHeader,
-			RaceTime:   raceDateTime.Format(layout),
+			RaceTime:   raceDateTime.Format(outputLayout),
 			RaceStatus: raceStatus,
 			Standings:  raceSummary,
 			FastestLap: fastestLap,
@@ -123,4 +113,16 @@ func toDateTime(dateToParse string) time.Time {
 		log.Println("Error parsing time:", err)
 	}
 	return time
+}
+
+func getRaceStatus(raceDateTime time.Time, fastestLap string) string {
+	now := time.Now()
+	if now.Before(raceDateTime) {
+		return "NOT_STARTED"
+	}
+	if now.After(raceDateTime) && fastestLap == "" {
+		return "LIVE"
+	} else {
+		return "FINISHED"
+	}
 }

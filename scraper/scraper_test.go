@@ -20,4 +20,11 @@ func TestGetF1PlanetLiveRaceResult(t *testing.T) {
 			t.Errorf("No standings found")
 		}
 	}
+
+	if result.RaceStatus == "FINISHED" {
+		// Check if the fastestLap fields are not empty
+		if result.FastestLap.Name == "" || result.FastestLap.Team == "" {
+			t.Errorf("fastestLap fields are empty, got: %v", result.FastestLap)
+		}
+	}
 }
